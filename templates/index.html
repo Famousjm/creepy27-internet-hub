@@ -58,6 +58,7 @@
             <a href="#security">Security</a>
             <a href="#tools">Tools</a>
             <a href="#workspace">Workspace</a>
+            <a href="#account">Account</a>
             <a href="#settings">Settings</a>
         </nav>
 
@@ -575,10 +576,224 @@
 
         <!-- SETTINGS -->
 
+<!-- ACCOUNT -->
+
+<section id="account" class="section">
+
+    <div class="section-heading">
+        <span>06</span>
+        <div>
+            <h2>Account</h2>
+            <p>Manage your CREEPY²⁷ account.</p>
+        </div>
+    </div>
+
+    <!-- LOGGED OUT -->
+
+    <div id="authPanel" class="panel">
+
+        <div id="authLoggedOut">
+
+            <h3>🔐 CREEPY²⁷ Account</h3>
+
+            <p>
+                Create an account to keep your workspace
+                connected to your profile.
+            </p>
+
+            <div class="input-row">
+
+                <input
+                    id="registerUsername"
+                    type="text"
+                    placeholder="Username"
+                    autocomplete="username"
+                >
+
+                <input
+                    id="registerEmail"
+                    type="email"
+                    placeholder="Email"
+                    autocomplete="email"
+                >
+
+            </div>
+
+            <div class="input-row">
+
+                <input
+                    id="registerPassword"
+                    type="password"
+                    placeholder="Password (8+ characters)"
+                    autocomplete="new-password"
+                >
+
+                <button id="registerBtn">
+                    CREATE ACCOUNT
+                </button>
+
+            </div>
+
+            <hr>
+
+            <div class="input-row">
+
+                <input
+                    id="loginEmail"
+                    type="email"
+                    placeholder="Email"
+                    autocomplete="email"
+                >
+
+                <input
+                    id="loginPassword"
+                    type="password"
+                    placeholder="Password"
+                    autocomplete="current-password"
+                >
+
+                <button id="loginBtn">
+                    LOGIN
+                </button>
+
+            </div>
+
+            <div id="authMessage" class="result-box">
+                Create an account or log in.
+            </div>
+
+        </div>
+
+
+<!-- ACCOUNT SETTINGS -->
+
+<div class="account-settings">
+
+    <hr>
+
+    <h3>⚙️ Account Settings</h3>
+
+    <div class="input-row">
+
+        <input
+            id="settingsUsername"
+            type="text"
+            placeholder="Username"
+            autocomplete="username"
+        >
+
+        <input
+            id="settingsEmail"
+            type="email"
+            placeholder="Email"
+            autocomplete="email"
+        >
+
+    </div>
+
+    <div class="input-row">
+
+        <select id="settingsTheme">
+
+            <option value="dark">
+                Dark Theme
+            </option>
+
+            <option value="light">
+                Light Theme
+            </option>
+
+        </select>
+
+        <button id="saveAccountBtn">
+            SAVE ACCOUNT
+        </button>
+
+    </div>
+
+    <div
+        id="settingsMessage"
+        class="result-box"
+    >
+        Update your account information.
+    </div>
+
+
+    <!-- CHANGE PASSWORD -->
+
+    <hr>
+
+    <h3>🔑 Change Password</h3>
+
+    <div class="input-row">
+
+        <input
+            id="currentPassword"
+            type="password"
+            placeholder="Current password"
+            autocomplete="current-password"
+        >
+
+        <input
+            id="newPassword"
+            type="password"
+            placeholder="New password (8+ characters)"
+            autocomplete="new-password"
+        >
+
+        <button id="changePasswordBtn">
+            CHANGE PASSWORD
+        </button>
+
+    </div>
+
+
+    <!-- DELETE ACCOUNT -->
+
+    <hr>
+
+    <h3>⚠️ Danger Zone</h3>
+
+    <p>
+        Deleting your account permanently removes
+        your account, notes and saved links.
+    </p>
+
+    <button
+        id="deleteAccountBtn"
+        class="danger-btn"
+    >
+        DELETE ACCOUNT
+    </button>
+
+</div>
+
+
+        <!-- LOGGED IN -->
+
+        <div id="authLoggedIn" hidden>
+
+            <h3>👤 Your Account</h3>
+
+            <div id="accountInfo" class="result-box">
+                Loading account...
+            </div>
+
+            <button id="logoutBtn" class="danger-btn">
+                LOG OUT
+            </button>
+
+        </div>
+
+    </div>
+
+</section>
+
+
         <section id="settings" class="section">
 
             <div class="section-heading">
-                <span>06</span>
+                <span>07</span>
                 <div>
                     <h2>Settings</h2>
                     <p>Customize your hub.</p>

@@ -1956,3 +1956,691 @@ clearIpBtn.addEventListener(
 );
 
 }
+
+
+/* =========================================================
+   ACCOUNT SYSTEM
+   ========================================================= */
+
+const authLoggedOut =
+    document.getElementById("authLoggedOut");
+
+const authLoggedIn =
+    document.getElementById("authLoggedIn");
+
+const registerUsername =
+    document.getElementById("registerUsername");
+
+const registerEmail =
+    document.getElementById("registerEmail");
+
+const registerPassword =
+    document.getElementById("registerPassword");
+
+const registerBtn =
+    document.getElementById("registerBtn");
+
+const loginEmail =
+    document.getElementById("loginEmail");
+
+const loginPassword =
+    document.getElementById("loginPassword");
+
+const loginBtn =
+    document.getElementById("loginBtn");
+
+const logoutBtn =
+    document.getElementById("logoutBtn");
+
+const authMessage =
+    document.getElementById("authMessage");
+
+const accountInfo =
+    document.getElementById("accountInfo");
+
+
+function showAuthMessage(message, success = false) {
+
+    if (!authMessage) return;
+
+    authMessage.textContent = message;
+
+    authMessage.dataset.status =
+        success ? "success" : "error";
+}
+
+
+function showLoggedInAccount(user) {
+
+    if (authLoggedOut) {
+        authLoggedOut.hidden = true;
+    }
+
+    if (authLoggedIn) {
+        authLoggedIn.hidden = false;
+    }
+
+    if (accountInfo) {
+
+        accountInfo.innerHTML = `
+            <strong>Username:</strong>
+            ${escapeHTML(user.username)}
+            <br><br>
+
+            <strong>Email:</strong>
+            ${escapeHTML(user.email)}
+            <br><br>
+
+            <strong>Theme:</strong>
+            ${escapeHTML(user.theme || "dark")}
+        `;
+    }
+
+}
+
+
+function showLoggedOutAccount() {
+
+    if (authLoggedOut) {
+        authLoggedOut.hidden = false;
+    }
+
+    if (authLoggedIn) {
+        authLoggedIn.hidden = true;
+    }
+
+}
+
+
+async function checkCurrentUser() {
+
+    try {
+
+        const response =
+            await fetch("/api/me");
+
+        const data =
+            await response.json();
+
+        if (
+            response.ok &&
+            data.ok &&
+            data.logged_in &&
+            data.user
+        ) {
+
+            showLoggedInAccount(data.user);
+
+        } else {
+
+            showLoggedOutAccount();
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Account check error:",
+            error
+        );
+
+        showLoggedOutAccount();
+
+    }
+
+}
+
+
+/* ---------------- REGISTER ---------------- */
+
+if (registerBtn) {
+
+    registerBtn.addEventListener(
+        "click",
+        async () => {
+
+            const username =
+                registerUsername
+                    ? registerUsername.value.trim()
+                    : "";
+
+            const email =
+                registerEmail
+                    ? registerEmail.value.trim()
+                    : "";
+
+            const password =
+                registerPassword
+                    ? registerPassword.value
+                    : "";
+
+            if (!username || !email || !password) {
+
+                showAuthMessage(
+                    "Fill in username, email and password."
+                );
+
+                return;
+            }
+
+            registerBtn.disabled = true;
+            registerBtn.textContent =
+                "CREATING...";
+
+            try {
+
+                const data =
+                    await postJSON(
+                        "/api/register",
+                        {
+                            username,
+                            email,
+                            password
+                        }
+                    );
+
+                if (data.ok && data.user) {
+
+                    showLoggedInAccount(
+                        data.user
+                    );
+
+                    showNotice(
+                        "Account created successfully."
+                    );
+
+                }
+
+            } catch (error) {
+
+                showAuthMessage(
+                    error.message ||
+                    "Could not create account."
+                );
+
+            } finally {
+
+                registerBtn.disabled = false;
+                registerBtn.textContent =
+                    "CREATE ACCOUNT";
+
+            }
+
+        }
+    );
+
+}
+
+
+/* ---------------- LOGIN ---------------- */
+
+if (loginBtn) {
+
+    loginBtn.addEventListener(
+        "click",
+        async () => {
+
+            const email =
+                loginEmail
+                    ? loginEmail.value.trim()
+                    : "";
+
+            const password =
+                loginPassword
+                    ? loginPassword.value
+                    : "";
+
+            if (!email || !password) {
+
+                showAuthMessage(
+                    "Enter your email and password."
+                );
+
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.textContent =
+                "LOGGING IN...";
+
+            try {
+
+                const data =
+                    await postJSON(
+                        "/api/login",
+                        {
+                            email,
+                            password
+                        }
+                    );
+
+                if (data.ok && data.user) {
+
+                    showLoggedInAccount(
+                        data.user
+                    );
+
+                    showNotice(
+                        "Login successful."
+                    );
+
+                }
+
+            } catch (error) {
+
+                showAuthMessage(
+                    error.message ||
+                    "Login failed."
+                );
+
+            } finally {
+
+                loginBtn.disabled = false;
+                loginBtn.textContent =
+                    "LOGIN";
+
+            }
+
+        }
+    );
+
+}
+
+
+/* ---------------- LOGOUT ---------------- */
+
+if (logoutBtn) {
+
+    logoutBtn.addEventListener(
+        "click",
+        async () => {
+
+            try {
+
+                const data =
+                    await postJSON(
+                        "/api/logout",
+                        {}
+                    );
+
+                if (data.ok) {
+
+                    showLoggedOutAccount();
+
+                    showNotice(
+                        "You have been logged out."
+                    );
+
+                }
+
+            } catch (error) {
+
+                showAuthMessage(
+                    error.message ||
+                    "Logout failed."
+                );
+
+            }
+
+        }
+    );
+
+}
+
+
+/* ---------------- INITIAL ACCOUNT CHECK ---------------- */
+
+checkCurrentUser();
+
+/* =========================================================
+   ACCOUNT SETTINGS
+   ========================================================= */
+
+const settingsUsername =
+    document.getElementById("settingsUsername");
+
+const settingsEmail =
+    document.getElementById("settingsEmail");
+
+const settingsTheme =
+    document.getElementById("settingsTheme");
+
+const saveAccountBtn =
+    document.getElementById("saveAccountBtn");
+
+const settingsMessage =
+    document.getElementById("settingsMessage");
+
+const currentPassword =
+    document.getElementById("currentPassword");
+
+const newPassword =
+    document.getElementById("newPassword");
+
+const changePasswordBtn =
+    document.getElementById("changePasswordBtn");
+
+const deleteAccountBtn =
+    document.getElementById("deleteAccountBtn");
+
+
+function showSettingsMessage(message, success = false) {
+
+    if (!settingsMessage) return;
+
+    settingsMessage.textContent = message;
+
+    settingsMessage.dataset.status =
+        success ? "success" : "error";
+}
+
+
+/* ---------------- LOAD ACCOUNT SETTINGS ---------------- */
+
+function loadAccountSettings(user) {
+
+    if (!user) return;
+
+    if (settingsUsername) {
+        settingsUsername.value =
+            user.username || "";
+    }
+
+    if (settingsEmail) {
+        settingsEmail.value =
+            user.email || "";
+    }
+
+    const accountTheme =
+        user.theme === "light"
+            ? "light"
+            : "dark";
+
+    if (settingsTheme) {
+        settingsTheme.value =
+            accountTheme;
+    }
+
+    /* Apply account theme using
+       the existing CREEPY²⁷ theme system */
+
+    document.body.classList.toggle(
+        "light",
+        accountTheme === "light"
+    );
+
+    if (themeToggle) {
+        themeToggle.checked =
+            accountTheme === "light";
+    }
+
+    localStorage.setItem(
+        "creepy27-theme",
+        accountTheme
+    );
+
+}
+
+
+/* ---------------- SAVE ACCOUNT ---------------- */
+
+if (saveAccountBtn) {
+
+    saveAccountBtn.addEventListener(
+        "click",
+        async () => {
+
+            const username =
+                settingsUsername
+                    ? settingsUsername.value.trim()
+                    : "";
+
+            const email =
+                settingsEmail
+                    ? settingsEmail.value.trim()
+                    : "";
+
+            const theme =
+                settingsTheme
+                    ? settingsTheme.value
+                    : "dark";
+
+            if (!username || !email) {
+
+                showSettingsMessage(
+                    "Username and email are required."
+                );
+
+                return;
+            }
+
+            saveAccountBtn.disabled = true;
+
+            saveAccountBtn.textContent =
+                "SAVING...";
+
+            try {
+
+                const data =
+                    await postJSON(
+                        "/api/account",
+                        {
+                            username,
+                            email,
+                            theme
+                        }
+                    );
+
+                if (data.ok && data.user) {
+
+                    loadAccountSettings(
+                        data.user
+                    );
+
+                    showLoggedInAccount(
+                        data.user
+                    );
+
+                    showSettingsMessage(
+                        "Account updated successfully.",
+                        true
+                    );
+
+                    showNotice(
+                        "Account settings saved."
+                    );
+
+                }
+
+            } catch (error) {
+
+                showSettingsMessage(
+                    error.message ||
+                    "Could not update account."
+                );
+
+            } finally {
+
+                saveAccountBtn.disabled = false;
+
+                saveAccountBtn.textContent =
+                    "SAVE ACCOUNT";
+
+            }
+
+        }
+    );
+
+}
+
+
+/* ---------------- CHANGE PASSWORD ---------------- */
+
+if (changePasswordBtn) {
+
+    changePasswordBtn.addEventListener(
+        "click",
+        async () => {
+
+            const current =
+                currentPassword
+                    ? currentPassword.value
+                    : "";
+
+            const newPass =
+                newPassword
+                    ? newPassword.value
+                    : "";
+
+            if (!current || !newPass) {
+
+                showSettingsMessage(
+                    "Enter your current and new password."
+                );
+
+                return;
+            }
+
+            if (newPass.length < 8) {
+
+                showSettingsMessage(
+                    "New password must be at least 8 characters."
+                );
+
+                return;
+            }
+
+            changePasswordBtn.disabled = true;
+
+            changePasswordBtn.textContent =
+                "CHANGING...";
+
+            try {
+
+                const data =
+                    await postJSON(
+                        "/api/account/password",
+                        {
+                            current_password: current,
+                            new_password: newPass
+                        }
+                    );
+
+                if (data.ok) {
+
+                    if (currentPassword) {
+                        currentPassword.value = "";
+                    }
+
+                    if (newPassword) {
+                        newPassword.value = "";
+                    }
+
+                    showSettingsMessage(
+                        "Password changed successfully.",
+                        true
+                    );
+
+                    showNotice(
+                        "Password changed successfully."
+                    );
+
+                }
+
+            } catch (error) {
+
+                showSettingsMessage(
+                    error.message ||
+                    "Could not change password."
+                );
+
+            } finally {
+
+                changePasswordBtn.disabled = false;
+
+                changePasswordBtn.textContent =
+                    "CHANGE PASSWORD";
+
+            }
+
+        }
+    );
+
+}
+
+
+/* ---------------- DELETE ACCOUNT ---------------- */
+
+if (deleteAccountBtn) {
+
+    deleteAccountBtn.addEventListener(
+        "click",
+        async () => {
+
+            const confirmed =
+                window.confirm(
+                    "Delete your CREEPY²⁷ account and all saved notes and links? This cannot be undone."
+                );
+
+            if (!confirmed) {
+                return;
+            }
+
+            deleteAccountBtn.disabled = true;
+
+            deleteAccountBtn.textContent =
+                "DELETING...";
+
+            try {
+
+                const data =
+                    await postJSON(
+                        "/api/account",
+                        {}
+                    );
+
+                if (data.ok) {
+
+                    showLoggedOutAccount();
+
+                    showNotice(
+                        "Account deleted successfully."
+                    );
+
+                }
+
+            } catch (error) {
+
+                showSettingsMessage(
+                    error.message ||
+                    "Could not delete account."
+                );
+
+            } finally {
+
+                deleteAccountBtn.disabled = false;
+
+                deleteAccountBtn.textContent =
+                    "DELETE ACCOUNT";
+
+            }
+
+        }
+    );
+
+}
+
+
+/* ---------------- UPDATE SETTINGS AFTER LOGIN ---------------- */
+
+const originalShowLoggedInAccount =
+    showLoggedInAccount;
+
+showLoggedInAccount = function(user) {
+
+    originalShowLoggedInAccount(user);
+
+    loadAccountSettings(user);
+
+};
+

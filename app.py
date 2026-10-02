@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session
 import sqlite3
 import os
 import json
@@ -7,8 +7,14 @@ import urllib.error
 from urllib.parse import urlparse, quote_plus
 from datetime import datetime, timezone
 import time
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
+
+if not app.config["SECRET_KEY"]:
+    raise RuntimeError("SECRET_KEY is not configured.")
 
 DB_PATH = os.path.join("database", "creepy27.db")
 
@@ -27,25 +33,441 @@ def init_db():
 
     conn = get_db()
 
+    # USERS
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS notes (
+        CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT NOT NULL,
+            username TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            theme TEXT NOT NULL DEFAULT 'dark',
             created_at TEXT NOT NULL
         )
     """)
 
+    # NOTES
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    # LINKS
     conn.execute("""
         CREATE TABLE IF NOT EXISTS links (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             url TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
 
     conn.commit()
     conn.close()
+
+
+# =========================
+# AUTHENTICATION
+# =========================
+
+@app.post("/api/register")
+def register():
+    data = request.get_json(silent=True) or {}
+
+    username = str(data.get("username", "")).strip()
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+
+    if not username or not email or not password:
+        return jsonify({
+            "ok": False,
+            "error": "Username, email and password are required."
+        }), 400
+
+    if len(username) < 3:
+        return jsonify({
+            "ok": False,
+            "error": "Username must be at least 3 characters."
+        }), 400
+
+    if len(password) < 8:
+        return jsonify({
+            "ok": False,
+            "error": "Password must be at least 8 characters."
+        }), 400
+
+    conn = get_db()
+
+    existing_user = conn.execute(
+        """
+        SELECT id FROM users
+        WHERE username = ? OR email = ?
+        """,
+        (username, email)
+    ).fetchone()
+
+    if existing_user:
+        conn.close()
+        return jsonify({
+            "ok": False,
+            "error": "Username or email is already registered."
+        }), 409
+
+    password_hash = generate_password_hash(password)
+
+    cur = conn.execute(
+        """
+        INSERT INTO users
+        (username, email, password_hash, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            username,
+            email,
+            password_hash,
+            datetime.now(timezone.utc).isoformat()
+        )
+    )
+
+    conn.commit()
+    user_id = cur.lastrowid
+    conn.close()
+
+    session.clear()
+    session["user_id"] = user_id
+
+    return jsonify({
+        "ok": True,
+        "message": "Account created successfully.",
+        "user": {
+            "id": user_id,
+            "username": username,
+            "email": email,
+            "theme": "dark"
+        }
+    })
+
+
+@app.post("/api/login")
+def login():
+    data = request.get_json(silent=True) or {}
+
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+
+    if not email or not password:
+        return jsonify({
+            "ok": False,
+            "error": "Email and password are required."
+        }), 400
+
+    conn = get_db()
+
+    user = conn.execute(
+        """
+        SELECT *
+        FROM users
+        WHERE email = ?
+        """,
+        (email,)
+    ).fetchone()
+
+    conn.close()
+
+    if not user or not check_password_hash(
+        user["password_hash"],
+        password
+    ):
+        return jsonify({
+            "ok": False,
+            "error": "Invalid email or password."
+        }), 401
+
+    session.clear()
+    session["user_id"] = user["id"]
+
+    return jsonify({
+        "ok": True,
+        "message": "Login successful.",
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "theme": user["theme"]
+        }
+    })
+
+
+@app.post("/api/logout")
+def logout():
+    session.clear()
+
+    return jsonify({
+        "ok": True,
+        "message": "Logged out successfully."
+    })
+
+
+@app.get("/api/me")
+def current_user():
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": True,
+            "logged_in": False,
+            "user": None
+        })
+
+    conn = get_db()
+
+    user = conn.execute(
+        """
+        SELECT id, username, email, theme, created_at
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,)
+    ).fetchone()
+
+    conn.close()
+
+    if not user:
+        session.clear()
+
+        return jsonify({
+            "ok": True,
+            "logged_in": False,
+            "user": None
+        })
+
+    return jsonify({
+        "ok": True,
+        "logged_in": True,
+        "user": dict(user)
+    })
+
+# =========================
+# ACCOUNT SETTINGS
+# =========================
+
+@app.put("/api/account")
+def update_account():
+
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
+
+    data = request.get_json(silent=True) or {}
+
+    username = str(
+        data.get("username", "")
+    ).strip()
+
+    email = str(
+        data.get("email", "")
+    ).strip().lower()
+
+    theme = str(
+        data.get("theme", "dark")
+    ).strip().lower()
+
+    if not username or not email:
+        return jsonify({
+            "ok": False,
+            "error": "Username and email are required."
+        }), 400
+
+    if len(username) < 3:
+        return jsonify({
+            "ok": False,
+            "error": "Username must be at least 3 characters."
+        }), 400
+
+    if theme not in ("dark", "light"):
+        theme = "dark"
+
+    conn = get_db()
+
+    existing = conn.execute(
+        """
+        SELECT id
+        FROM users
+        WHERE (username = ? OR email = ?)
+        AND id != ?
+        """,
+        (username, email, user_id)
+    ).fetchone()
+
+    if existing:
+        conn.close()
+
+        return jsonify({
+            "ok": False,
+            "error": "Username or email is already in use."
+        }), 409
+
+    conn.execute(
+        """
+        UPDATE users
+        SET username = ?, email = ?, theme = ?
+        WHERE id = ?
+        """,
+        (username, email, theme, user_id)
+    )
+
+    conn.commit()
+
+    user = conn.execute(
+        """
+        SELECT id, username, email, theme, created_at
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,)
+    ).fetchone()
+
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "message": "Account updated successfully.",
+        "user": dict(user)
+    })
+
+
+@app.put("/api/account/password")
+def change_password():
+
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
+
+    data = request.get_json(silent=True) or {}
+
+    current_password = str(
+        data.get("current_password", "")
+    )
+
+    new_password = str(
+        data.get("new_password", "")
+    )
+
+    if not current_password or not new_password:
+        return jsonify({
+            "ok": False,
+            "error": "Current and new passwords are required."
+        }), 400
+
+    if len(new_password) < 8:
+        return jsonify({
+            "ok": False,
+            "error": "New password must be at least 8 characters."
+        }), 400
+
+    conn = get_db()
+
+    user = conn.execute(
+        """
+        SELECT password_hash
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,)
+    ).fetchone()
+
+    if not user:
+        conn.close()
+
+        return jsonify({
+            "ok": False,
+            "error": "Account not found."
+        }), 404
+
+    if not check_password_hash(
+        user["password_hash"],
+        current_password
+    ):
+        conn.close()
+
+        return jsonify({
+            "ok": False,
+            "error": "Current password is incorrect."
+        }), 401
+
+    new_password_hash = generate_password_hash(
+        new_password
+    )
+
+    conn.execute(
+        """
+        UPDATE users
+        SET password_hash = ?
+        WHERE id = ?
+        """,
+        (new_password_hash, user_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "message": "Password changed successfully."
+    })
+
+
+@app.delete("/api/account")
+def delete_account():
+
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
+
+    conn = get_db()
+
+    conn.execute(
+        "DELETE FROM notes WHERE user_id = ?",
+        (user_id,)
+    )
+
+    conn.execute(
+        "DELETE FROM links WHERE user_id = ?",
+        (user_id,)
+    )
+
+    conn.execute(
+        "DELETE FROM users WHERE id = ?",
+        (user_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+    session.clear()
+
+    return jsonify({
+        "ok": True,
+        "message": "Account and personal data deleted."
+    })
 
 
 # =========================
@@ -390,22 +812,41 @@ def check_url():
 @app.get("/api/notes")
 def get_notes():
 
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
+
     conn = get_db()
 
     rows = conn.execute(
-        "SELECT * FROM notes ORDER BY id DESC"
+        """
+        SELECT id, content, created_at
+        FROM notes
+        WHERE user_id = ?
+        ORDER BY id DESC
+        """,
+        (user_id,)
     ).fetchall()
 
     conn.close()
 
-    return jsonify([
-        dict(row)
-        for row in rows
-    ])
+    return jsonify([dict(row) for row in rows])
 
 
 @app.post("/api/notes")
 def add_note():
+
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
 
     data = request.get_json(silent=True) or {}
 
@@ -424,10 +865,11 @@ def add_note():
     cur = conn.execute(
         """
         INSERT INTO notes
-        (content, created_at)
-        VALUES (?, ?)
+        (user_id, content, created_at)
+        VALUES (?, ?, ?)
         """,
         (
+            user_id,
             content,
             datetime.now(timezone.utc).isoformat()
         )
@@ -448,14 +890,26 @@ def add_note():
 @app.delete("/api/notes/<int:note_id>")
 def delete_note(note_id):
 
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
+
     conn = get_db()
 
     conn.execute(
-        "DELETE FROM notes WHERE id = ?",
-        (note_id,)
+        """
+        DELETE FROM notes
+        WHERE id = ? AND user_id = ?
+        """,
+        (note_id, user_id)
     )
 
     conn.commit()
+
     conn.close()
 
     return jsonify({
@@ -470,22 +924,41 @@ def delete_note(note_id):
 @app.get("/api/links")
 def get_links():
 
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
+
     conn = get_db()
 
     rows = conn.execute(
-        "SELECT * FROM links ORDER BY id DESC"
+        """
+        SELECT id, title, url, created_at
+        FROM links
+        WHERE user_id = ?
+        ORDER BY id DESC
+        """,
+        (user_id,)
     ).fetchall()
 
     conn.close()
 
-    return jsonify([
-        dict(row)
-        for row in rows
-    ])
+    return jsonify([dict(row) for row in rows])
 
 
 @app.post("/api/links")
 def add_link():
+
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
 
     data = request.get_json(silent=True) or {}
 
@@ -498,7 +971,6 @@ def add_link():
     ).strip()
 
     if not title or not url:
-
         return jsonify({
             "ok": False,
             "error": "Title and URL are required."
@@ -509,10 +981,11 @@ def add_link():
     cur = conn.execute(
         """
         INSERT INTO links
-        (title, url, created_at)
-        VALUES (?, ?, ?)
+        (user_id, title, url, created_at)
+        VALUES (?, ?, ?, ?)
         """,
         (
+            user_id,
             title,
             url,
             datetime.now(timezone.utc).isoformat()
@@ -534,19 +1007,32 @@ def add_link():
 @app.delete("/api/links/<int:link_id>")
 def delete_link(link_id):
 
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "ok": False,
+            "error": "Login required."
+        }), 401
+
     conn = get_db()
 
     conn.execute(
-        "DELETE FROM links WHERE id = ?",
-        (link_id,)
+        """
+        DELETE FROM links
+        WHERE id = ? AND user_id = ?
+        """,
+        (link_id, user_id)
     )
 
     conn.commit()
+
     conn.close()
 
     return jsonify({
         "ok": True
     })
+
 
 # =========================
 # IP INFORMATION
